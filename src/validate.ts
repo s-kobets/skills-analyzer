@@ -1,10 +1,42 @@
-const path = require('node:path');
-const fs = require('node:fs');
+import path from 'node:path';
+import fs from 'node:fs';
 
-const { parseFrontmatter, readSkillFile } = require('./frontmatter');
+import type { SkillEntry, RootReport } from './discovery.js';
+import { parseFrontmatter, readSkillFile } from './frontmatter.js';
 
-function validateSkill(skill, options) {
-  const report = {
+export interface SkillFinding {
+  code: string;
+  severity: 'error' | 'warning';
+  message: string;
+  recommendation: string;
+  path: string;
+}
+
+export interface SkillReport {
+  path: string;
+  name: string;
+  exists: boolean;
+  metadata: { name: string; description: string };
+  status: 'healthy' | 'warning' | 'error';
+  findings: SkillFinding[];
+}
+
+export interface Counts {
+  roots: number;
+  skills: number;
+  healthy: number;
+  warnings: number;
+  errors: number;
+}
+
+export interface Report {
+  roots: RootReport[];
+  skills: SkillReport[];
+  counts: Counts;
+}
+
+export function validateSkill(skill: SkillEntry, _options: Record<string, unknown>): SkillReport {
+  const report: SkillReport = {
     path: skill.path,
     name: skill.name,
     exists: true,
@@ -32,7 +64,7 @@ function validateSkill(skill, options) {
   report.metadata = metadata;
 
   for (const err of errors) {
-    const severity = (err.code === 'MISSING_NAME' || err.code === 'MISSING_DESCRIPTION') ? 'error' : 'warning';
+    const severity: 'error' | 'warning' = (err.code === 'MISSING_NAME' || err.code === 'MISSING_DESCRIPTION') ? 'error' : 'warning';
     report.findings.push({
       code: err.code,
       severity,
@@ -42,18 +74,18 @@ function validateSkill(skill, options) {
     });
   }
 
-  checkReferences(skill.path, content, report);
+  checkReferences(skill.path, content ?? '', report);
   checkNameDrift(skill, metadata, report);
   computeStatus(report);
 
   return report;
 }
 
-function checkReferences(skillDir, content, report) {
+function checkReferences(skillDir: string, content: string, report: SkillReport): void {
   const linkPattern = /\[([^\]]*)\]\(([^)]+)\)/g;
   const backtickPattern = /`(\.\/[^`]+)`/g;
 
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = linkPattern.exec(content)) !== null) {
     checkPath(skillDir, match[2], report);
   }
@@ -62,7 +94,7 @@ function checkReferences(skillDir, content, report) {
   }
 }
 
-function checkPath(skillDir, target, report) {
+function checkPath(skillDir: string, target: string, report: SkillReport): void {
   const trimmed = target.trim();
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/')) return;
   if (trimmed.startsWith('#')) return;
@@ -82,7 +114,7 @@ function checkPath(skillDir, target, report) {
   } catch {}
 }
 
-function checkNameDrift(skill, metadata, report) {
+function checkNameDrift(skill: SkillEntry, metadata: { name: string }, report: SkillReport): void {
   if (metadata.name && metadata.name !== skill.name) {
     report.findings.push({
       code: 'NAME_DRIFT',
@@ -94,28 +126,28 @@ function checkNameDrift(skill, metadata, report) {
   }
 }
 
-function computeStatus(report) {
+function computeStatus(report: SkillReport): void {
   const errors = report.findings.filter((f) => f.severity === 'error');
   const warnings = report.findings.filter((f) => f.severity === 'warning');
   if (errors.length > 0) report.status = 'error';
   else if (warnings.length > 0) report.status = 'warning';
 }
 
-function applyDuplicateFindings(skillReports) {
-  const nameCount = new Map();
-  const nameReports = new Map();
+export function applyDuplicateFindings(skillReports: SkillReport[]): SkillReport[] {
+  const nameCount = new Map<string, number>();
+  const nameReports = new Map<string, SkillReport[]>();
 
   for (const report of skillReports) {
     if (report.metadata.name) {
       nameCount.set(report.metadata.name, (nameCount.get(report.metadata.name) || 0) + 1);
       if (!nameReports.has(report.metadata.name)) nameReports.set(report.metadata.name, []);
-      nameReports.get(report.metadata.name).push(report);
+      nameReports.get(report.metadata.name)!.push(report);
     }
   }
 
   for (const [name, count] of nameCount) {
     if (count > 1) {
-      for (const report of nameReports.get(name)) {
+      for (const report of nameReports.get(name)!) {
         report.findings.push({
           code: 'DUPLICATE_NAME',
           severity: 'error',
@@ -131,8 +163,8 @@ function applyDuplicateFindings(skillReports) {
   return skillReports;
 }
 
-function buildReport(rootReports, skillReports) {
-  const counts = { roots: 0, skills: 0, healthy: 0, warnings: 0, errors: 0 };
+export function buildReport(rootReports: RootReport[], skillReports: SkillReport[]): Report {
+  const counts: Counts = { roots: 0, skills: 0, healthy: 0, warnings: 0, errors: 0 };
 
   for (const r of rootReports) {
     if (r.exists) counts.roots++;
@@ -147,10 +179,8 @@ function buildReport(rootReports, skillReports) {
   return { roots: rootReports, skills: skillReports, counts };
 }
 
-function getExitCode(report, options) {
+export function getExitCode(report: Report, options: { warningsAsErrors?: boolean }): number {
   if (report.counts.errors > 0) return 1;
   if (options.warningsAsErrors && report.counts.warnings > 0) return 1;
   return 0;
 }
-
-module.exports = { validateSkill, applyDuplicateFindings, buildReport, getExitCode };

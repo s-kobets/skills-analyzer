@@ -9,6 +9,16 @@ const tmpBase = path.join(os.tmpdir(), 'sa-cli-test-' + Date.now());
 const fakeHome = path.join(tmpBase, 'fake-home');
 fs.mkdirSync(fakeHome, { recursive: true });
 
+const binPath = path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js'));
+
+function runCli(args, opts = {}) {
+  return spawnSync(process.execPath, [
+    '--require', 'tsx/cjs',
+    binPath,
+    ...args,
+  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome }, ...opts });
+}
+
 function makeFixture(contents) {
   const dir = path.join(tmpBase, String(Math.random().toString(36).slice(2)));
   fs.mkdirSync(dir, { recursive: true });
@@ -27,10 +37,7 @@ test('default scan renders tree', () => {
     '.agents/skills/beta/SKILL.md': '---\nname: beta\ndescription: second skill\n---',
   });
 
-  const result = spawnSync(process.execPath, [
-    path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js')),
-    '--project', fixture,
-  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+  const result = runCli(['--project', fixture]);
 
   assert.match(result.stdout, /Skills/);
   assert.match(result.stdout, /alpha/);
@@ -42,10 +49,7 @@ test('report --json emits parseable JSON and exits on errors', () => {
     '.agents/skills/broken/SKILL.md': '---\n---',
   });
 
-  const result = spawnSync(process.execPath, [
-    path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js')),
-    'report', '--json', '--project', fixture,
-  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+  const result = runCli(['report', '--json', '--project', fixture]);
 
   assert.equal(result.status, 1);
   const report = JSON.parse(result.stdout);
@@ -59,10 +63,7 @@ test('check command reports findings', () => {
     '.agents/skills/bad/SKILL.md': '---\n---',
   });
 
-  const result = spawnSync(process.execPath, [
-    path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js')),
-    'check', '--project', fixture,
-  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+  const result = runCli(['check', '--project', fixture]);
 
   assert.match(result.stdout, /Recommendations/);
   assert.equal(result.status, 1);
@@ -76,10 +77,7 @@ test('--root flag adds additional scan path', () => {
   fs.mkdirSync(path.join(extraRoot, 'extra-skill'), { recursive: true });
   fs.writeFileSync(path.join(extraRoot, 'extra-skill', 'SKILL.md'), '---\nname: extra\ndescription: extra desc\n---');
 
-  const result = spawnSync(process.execPath, [
-    path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js')),
-    '--json', '--project', fixture, '--root', extraRoot,
-  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+  const result = runCli(['--json', '--project', fixture, '--root', extraRoot]);
 
   const report = JSON.parse(result.stdout);
   const names = report.skills.map((s) => s.metadata.name);
@@ -93,10 +91,7 @@ test('--problems-only omits healthy skills', () => {
     '.agents/skills/bad/SKILL.md': '---\n---',
   });
 
-  const result = spawnSync(process.execPath, [
-    path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js')),
-    '--problems-only', '--project', fixture,
-  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+  const result = runCli(['--problems-only', '--project', fixture]);
 
   assert.doesNotMatch(result.stdout, /good/);
   assert.match(result.stdout, /bad/);
@@ -107,19 +102,13 @@ test('--warnings-as-errors exits 1 for names drift', () => {
     '.agents/skills/drift/SKILL.md': '---\nname: other-name\ndescription: some desc\n---',
   });
 
-  const result = spawnSync(process.execPath, [
-    path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js')),
-    '--warnings-as-errors', '--project', fixture,
-  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+  const result = runCli(['--warnings-as-errors', '--project', fixture]);
 
   assert.equal(result.status, 1);
 });
 
 test('unknown option prints usage and exits 2', () => {
-  const result = spawnSync(process.execPath, [
-    path.resolve(path.join(__dirname, '..', 'bin', 'skills-analyzer.js')),
-    '--bogus-flag',
-  ], { encoding: 'utf8', env: { ...process.env, HOME: fakeHome } });
+  const result = runCli(['--bogus-flag']);
 
   assert.equal(result.status, 2);
 });

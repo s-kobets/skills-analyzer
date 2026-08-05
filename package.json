@@ -2,15 +2,40 @@
   "name": "skills-analyzer",
   "version": "1.0.0",
   "description": "Analyze agent skills across global and project-local directories",
-  "main": "index.js",
+  "main": "dist/skills-analyzer.js",
+  "files": [
+    "dist/"
+  ],
   "scripts": {
-    "test": "node --test"
+    "build": "tsx scripts/build.ts",
+    "test": "tsx --test",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build && npm test"
   },
-  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/segeykobets/skills-analyzer.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "skills",
+    "analyzer",
+    "agent",
+    "cli"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bin": {
-    "skills-analyzer": "bin/skills-analyzer.js"
+    "skills-analyzer": "dist/skills-analyzer.js",
+    "sa": "dist/skills-analyzer.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.7",
+    "typescript": "^7.0.2"
   }
 }

@@ -1,2 +1,4 @@
 docs/
 report.json
+dist/
+node_modules/

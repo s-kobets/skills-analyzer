@@ -1,9 +1,30 @@
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
 
-function parseFrontmatter(content) {
-  const metadata = { name: '', description: '' };
-  const errors = [];
+export interface FrontmatterMetadata {
+  name: string;
+  description: string;
+}
+
+export interface FrontmatterError {
+  code: string;
+  message: string;
+  recommendation: string;
+}
+
+export interface FrontmatterResult {
+  metadata: FrontmatterMetadata;
+  errors: FrontmatterError[];
+}
+
+export interface ReadFileResult {
+  content: string | null;
+  readError: { code: string; message: string } | null;
+}
+
+export function parseFrontmatter(content: string | null): FrontmatterResult {
+  const metadata: FrontmatterMetadata = { name: '', description: '' };
+  const errors: FrontmatterError[] = [];
 
   if (!content || !content.startsWith('---\n')) {
     return { metadata, errors };
@@ -70,14 +91,12 @@ function parseFrontmatter(content) {
   return { metadata, errors };
 }
 
-function readSkillFile(skillDir) {
+export function readSkillFile(skillDir: string): ReadFileResult {
   const filePath = path.join(skillDir, 'SKILL.md');
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
     return { content, readError: null };
-  } catch (err) {
-    return { content: null, readError: { code: err.code || 'READ_ERROR', message: err.message } };
+  } catch (err: unknown) {
+    return { content: null, readError: { code: (err as NodeJS.ErrnoException).code || 'READ_ERROR', message: (err as Error).message } };
   }
 }
-
-module.exports = { parseFrontmatter, readSkillFile };

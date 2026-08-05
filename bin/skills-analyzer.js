@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 'use strict';
 
 const { parseArgs, run } = require('../src/cli');

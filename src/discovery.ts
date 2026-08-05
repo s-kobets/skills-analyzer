@@ -1,8 +1,26 @@
-const path = require('node:path');
-const fs = require('node:fs');
-const os = require('node:os');
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 
-function getDefaultRoots({ homeDir, projectDir } = {}) {
+export interface DiscoveryOptions {
+  homeDir?: string;
+  projectDir?: string;
+}
+
+export interface RootReport {
+  path: string;
+  exists: boolean;
+  explicit: boolean;
+  skills: SkillEntry[];
+  error: string | null;
+}
+
+export interface SkillEntry {
+  path: string;
+  name: string;
+}
+
+export function getDefaultRoots({ homeDir, projectDir }: DiscoveryOptions = {}): string[] {
   const home = homeDir || os.homedir();
   const project = projectDir || process.cwd();
   const globalRoots = [
@@ -21,9 +39,9 @@ function getDefaultRoots({ homeDir, projectDir } = {}) {
   return [...globalRoots, ...projectRoots];
 }
 
-function normalizeRoots(roots, cwd) {
-  const seen = new Set();
-  const result = [];
+export function normalizeRoots(roots: string[], cwd?: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
   for (const r of roots) {
     const abs = path.resolve(cwd || process.cwd(), r);
     if (!seen.has(abs)) {
@@ -34,8 +52,8 @@ function normalizeRoots(roots, cwd) {
   return result;
 }
 
-function discoverRoot(rootPath, { explicit } = {}) {
-  const result = {
+export function discoverRoot(rootPath: string, { explicit }: { explicit?: boolean } = {}): RootReport {
+  const result: RootReport = {
     path: rootPath,
     exists: false,
     explicit: !!explicit,
@@ -60,16 +78,14 @@ function discoverRoot(rootPath, { explicit } = {}) {
         }
       } catch {}
     }
-  } catch (err) {
-    result.error = err.message;
+  } catch (err: unknown) {
+    result.error = (err as Error).message;
     result.exists = true;
   }
 
   return result;
 }
 
-function discoverSkills(roots, options) {
+export function discoverSkills(roots: string[], options: Record<string, unknown>): RootReport[] {
   return roots.map((r) => discoverRoot(r, options));
 }
-
-module.exports = { getDefaultRoots, normalizeRoots, discoverRoot, discoverSkills };

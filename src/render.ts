@@ -1,5 +1,12 @@
-function renderTree(report, options = {}) {
-  const lines = [];
+import type { Report } from './validate.js';
+
+export interface RenderOptions {
+  color?: boolean;
+  problemsOnly?: boolean;
+}
+
+export function renderTree(report: Report, options: RenderOptions = {}): string {
+  const lines: string[] = [];
   const color = options.color !== false;
 
   lines.push('');
@@ -43,12 +50,12 @@ function renderTree(report, options = {}) {
   return lines.join('\n');
 }
 
-function renderFindings(report, options = {}) {
+export function renderFindings(report: Report, options: RenderOptions = {}): string {
   const color = options.color !== false;
   const allSkills = report.skills.filter((s) => s.findings.length > 0);
   if (allSkills.length === 0) return '';
 
-  const lines = [];
+  const lines: string[] = [];
   lines.push('');
   lines.push('Recommendations');
   lines.push('');
@@ -68,8 +75,6 @@ function renderFindings(report, options = {}) {
   return lines.join('\n');
 }
 
-function renderJson(report) {
+export function renderJson(report: Report): string {
   return JSON.stringify(report, null, 2);
 }
-
-module.exports = { renderTree, renderFindings, renderJson };

@@ -5,15 +5,19 @@ Analyze agent skills across global and project-local directories with a terminal
 ## Quick Start
 
 ```bash
-npm install
-npm test
-node bin/skills-analyzer.js
+# Global install (recommended)
+npm install -g skills-analyzer
+skills-analyzer
+
+# Or use the short alias
+sa
 ```
 
 ## Usage
 
 ```text
-node bin/skills-analyzer.js [command] [options]
+skills-analyzer [command] [options]
+sa [command] [options]
 ```
 
 ### Commands
@@ -71,19 +75,19 @@ node bin/skills-analyzer.js [command] [options]
 
 ```bash
 # Scan and show tree
-node bin/skills-analyzer.js
+skills-analyzer
 
 # Show only problems
-node bin/skills-analyzer.js --problems-only
+skills-analyzer --problems-only
 
 # Check a specific project
-node bin/skills-analyzer.js check --project ~/my-project
+skills-analyzer check --project ~/my-project
 
 # Export JSON report
-node bin/skills-analyzer.js report --json > report.json
+skills-analyzer report --json > report.json
 
 # Scan an extra directory
-node bin/skills-analyzer.js --root ~/custom-skills
+skills-analyzer --root ~/custom-skills
 ```
 
 ## Exit Codes

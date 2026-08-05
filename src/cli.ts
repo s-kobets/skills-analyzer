@@ -1,10 +1,30 @@
-const { getDefaultRoots, normalizeRoots, discoverSkills } = require('./discovery');
-const { validateSkill, applyDuplicateFindings, buildReport, getExitCode } = require('./validate');
-const { renderTree, renderFindings, renderJson } = require('./render');
+import { getDefaultRoots, normalizeRoots, discoverSkills } from './discovery.js';
+import { validateSkill, applyDuplicateFindings, buildReport, getExitCode } from './validate.js';
+import { renderTree, renderFindings, renderJson } from './render.js';
 
-function parseArgs(argv) {
+import type { SkillReport } from './validate.js';
+import type { RootReport } from './discovery.js';
+
+export interface CliOptions {
+  command: string;
+  project: string;
+  roots: string[];
+  color: boolean;
+  json: boolean;
+  problemsOnly: boolean;
+  warningsAsErrors: boolean;
+  help?: boolean;
+  error?: string;
+}
+
+export interface CliIO {
+  out: { write: (msg: string) => void };
+  err: { write: (msg: string) => void };
+}
+
+export function parseArgs(argv: string[]): CliOptions {
   const args = argv.slice(2);
-  const options = {
+  const options: CliOptions = {
     command: 'scan',
     project: process.cwd(),
     roots: [],
@@ -57,7 +77,7 @@ function parseArgs(argv) {
   return options;
 }
 
-function printHelp() {
+export function printHelp(): string {
   return `Usage: skills-analyzer [command] [options]
 
 Commands:
@@ -76,7 +96,7 @@ Options:
   -h, --help           Show this help`;
 }
 
-function run(options, io) {
+export function run(options: CliOptions, io: CliIO): number {
   if (options.error) {
     io.err.write('skills-analyzer: ' + options.error + '\n\n' + printHelp() + '\n');
     return 2;
@@ -94,9 +114,9 @@ function run(options, io) {
   }
 
   const normalized = normalizeRoots(allRoots);
-  const rootReports = discoverSkills(normalized, {});
+  const rootReports: RootReport[] = discoverSkills(normalized, {});
 
-  let skillReports = [];
+  let skillReports: SkillReport[] = [];
   for (const root of rootReports) {
     for (const skill of root.skills) {
       skillReports.push(validateSkill(skill, {}));
@@ -117,5 +137,3 @@ function run(options, io) {
 
   return getExitCode(report, options);
 }
-
-module.exports = { parseArgs, run, printHelp };
