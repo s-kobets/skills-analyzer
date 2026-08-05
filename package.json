@@ -1,0 +1,16 @@
+{
+  "name": "skills-analyzer",
+  "version": "1.0.0",
+  "description": "Analyze agent skills across global and project-local directories",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bin": {
+    "skills-analyzer": "bin/skills-analyzer.js"
+  }
+}
