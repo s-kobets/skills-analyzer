@@ -1,13 +1,15 @@
+import fs from 'node:fs';
+
 import { getDefaultRoots, normalizeRoots, discoverSkills } from './discovery.js';
 import { validateSkill, applyDuplicateFindings, buildReport, getExitCode } from './validate.js';
 import { renderTree, renderFindings, renderJson } from './render.js';
-
 import type { SkillReport } from './validate.js';
 import type { RootReport } from './discovery.js';
 
 export interface CliOptions {
   command: string;
   project: string;
+  projectSpecified: boolean;
   roots: string[];
   color: boolean;
   json: boolean;
@@ -18,8 +20,8 @@ export interface CliOptions {
 }
 
 export interface CliIO {
-  out: { write: (msg: string) => void };
-  err: { write: (msg: string) => void };
+  out: { write: (message: string) => void };
+  err: { write: (message: string) => void };
 }
 
 export function parseArgs(argv: string[]): CliOptions {
@@ -27,6 +29,7 @@ export function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     command: 'scan',
     project: process.cwd(),
+    projectSpecified: false,
     roots: [],
     color: true,
     json: false,
@@ -36,10 +39,8 @@ export function parseArgs(argv: string[]): CliOptions {
 
   let i = 0;
   const commands = ['scan', 'tree', 'check', 'report'];
-
   while (i < args.length) {
     const arg = args[i];
-
     if (commands.includes(arg) && i === 0) {
       options.command = arg;
       i++;
@@ -48,9 +49,12 @@ export function parseArgs(argv: string[]): CliOptions {
 
     switch (arg) {
       case '--project':
+        if (!args[i + 1] || args[i + 1].startsWith('-')) return { ...options, error: '--project requires a path' };
         options.project = args[++i];
+        options.projectSpecified = true;
         break;
       case '--root':
+        if (!args[i + 1] || args[i + 1].startsWith('-')) return { ...options, error: '--root requires a path' };
         options.roots.push(args[++i]);
         break;
       case '--json':
@@ -73,7 +77,6 @@ export function parseArgs(argv: string[]): CliOptions {
     }
     i++;
   }
-
   return options;
 }
 
@@ -101,39 +104,40 @@ export function run(options: CliOptions, io: CliIO): number {
     io.err.write('skills-analyzer: ' + options.error + '\n\n' + printHelp() + '\n');
     return 2;
   }
-
   if (options.help) {
     io.out.write(printHelp() + '\n');
     return 0;
   }
 
-  const defaultRoots = getDefaultRoots({ projectDir: options.project });
-  const allRoots = [...defaultRoots];
-  if (options.roots.length > 0) {
-    allRoots.push(...options.roots);
+  if (options.projectSpecified) {
+    try {
+      if (!fs.statSync(options.project).isDirectory()) throw new Error('not a directory');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      io.err.write('skills-analyzer: invalid project directory: ' + options.project + ' (' + message + ')\n');
+      return 2;
+    }
   }
 
-  const normalized = normalizeRoots(allRoots);
-  const rootReports: RootReport[] = discoverSkills(normalized, {});
-
+  const roots = [...getDefaultRoots({ projectDir: options.project }), ...options.roots];
+  const normalized = normalizeRoots(roots);
+  const explicitRoots = new Set(normalizeRoots(options.roots));
+  const rootReports: RootReport[] = discoverSkills(normalized, { explicitRoots });
   let skillReports: SkillReport[] = [];
+
   for (const root of rootReports) {
-    for (const skill of root.skills) {
-      skillReports.push(validateSkill(skill, {}));
-    }
+    for (const skill of root.skills) skillReports.push(validateSkill(skill));
   }
 
   skillReports = applyDuplicateFindings(skillReports);
   const report = buildReport(rootReports, skillReports);
+  const renderOptions = { color: options.color, problemsOnly: options.problemsOnly };
 
-  const renderOpts = { color: options.color, problemsOnly: options.problemsOnly };
-
-  if (options.json) {
+  if (options.json || options.command === 'report') {
     io.out.write(renderJson(report) + '\n');
   } else {
-    io.out.write(renderTree(report, renderOpts) + '\n');
-    io.out.write(renderFindings(report, renderOpts) + '\n');
+    io.out.write(renderTree(report, renderOptions) + '\n');
+    io.out.write(renderFindings(report, renderOptions) + '\n');
   }
-
   return getExitCode(report, options);
 }

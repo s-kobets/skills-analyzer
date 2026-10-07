@@ -80,6 +80,84 @@ test('reports missing local reference', () => {
   const report = validateSkill({ path: skillDir, name: 'ref-test' }, {});
   assert.equal(report.status, 'warning');
   assert.equal(report.findings[0].code, 'MISSING_REFERENCE');
+  assert.equal(report.findings[0].line, 5);
+  assert.equal(report.findings[0].sourcePath, path.join(skillDir, 'SKILL.md'));
+});
+
+test('ignores a fragment when checking a local reference', () => {
+  const skillDir = makeTempDir();
+  writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: ref-test\ndescription: has ref\n---\nSee [guide](./guide.md#setup)');
+  writeFile(path.join(skillDir, 'guide.md'), '# Guide');
+  const report = validateSkill({ path: skillDir, name: 'ref-test' }, {});
+  assert.equal(report.status, 'healthy');
+});
+
+test('ignores glob patterns and directory targets in skill instructions', () => {
+  const skillDir = makeTempDir();
+  writeFile(path.join(skillDir, 'SKILL.md'), [
+    '---',
+    'name: ref-test',
+    'description: has templates',
+    '---',
+    '[reference](./reference/*.html)',
+    '[learning records](./learning-records/*.md)',
+    '[assets](./assets/*)',
+    '[lessons](./lessons/)',
+    '[assets](./assets/)',
+  ].join('\n'));
+  const report = validateSkill({ path: skillDir, name: 'ref-test' });
+  assert.equal(report.status, 'healthy');
+});
+
+test('ignores example links inside code and code fences', () => {
+  const skillDir = makeTempDir();
+  writeFile(path.join(skillDir, 'SKILL.md'), [
+    '---',
+    'name: ref-test',
+    'description: has examples',
+    '---',
+    'Example: `[src/packages/README.md](./src/packages/README.md)`',
+    '```markdown',
+    '- [<closed ticket title>](link): <one-line gist>',
+    '```',
+  ].join('\n'));
+  const report = validateSkill({ path: skillDir, name: 'ref-test' });
+  assert.equal(report.status, 'healthy');
+});
+
+test('checks reference links and link targets containing parentheses', () => {
+  const skillDir = makeTempDir();
+  writeFile(path.join(skillDir, 'SKILL.md'), [
+    '---',
+    'name: ref-test',
+    'description: markdown links',
+    '---',
+    '[Draft](<./guide (draft).md>)',
+    '[Manual][manual]',
+    '[manual]: ./manual.md',
+  ].join('\n'));
+  writeFile(path.join(skillDir, 'guide (draft).md'), '# Draft');
+  writeFile(path.join(skillDir, 'manual.md'), '# Manual');
+
+  const report = validateSkill({ path: skillDir, name: 'ref-test' });
+  assert.equal(report.status, 'healthy');
+});
+
+test('checks bare relative Markdown links and ignores non-HTTP URL schemes', () => {
+  const skillDir = makeTempDir();
+  writeFile(path.join(skillDir, 'SKILL.md'), [
+    '---',
+    'name: ref-test',
+    'description: relative code path',
+    '---',
+    'Read [the guide](references/missing.md).',
+    '[FTP resource](ftp://example.com/manual.md)',
+    '[Windows path](C:/docs/manual.md)',
+  ].join('\n'));
+
+  const report = validateSkill({ path: skillDir, name: 'ref-test' });
+  assert.equal(report.findings.length, 1);
+  assert.match(report.findings[0].message, /references\/missing\.md/);
 });
 
 test('ignores URLs and absolute paths in references', () => {
@@ -101,6 +179,11 @@ test('applyDuplicateFindings adds warnings for duplicate names', () => {
   const results = applyDuplicateFindings([report1, report2]);
   assert.equal(results[0].status, 'error');
   assert.ok(results[0].findings.some((f) => f.code === 'DUPLICATE_NAME'));
+  const duplicate = results[0].findings.find((f) => f.code === 'DUPLICATE_NAME');
+  assert.deepEqual(duplicate.relatedPaths, [
+    { path: path.join(skillDir1, 'SKILL.md'), line: 2 },
+    { path: path.join(skillDir2, 'SKILL.md'), line: 2 },
+  ]);
   assert.equal(results[1].status, 'error');
   assert.ok(results[1].findings.some((f) => f.code === 'DUPLICATE_NAME'));
 });
@@ -143,6 +226,11 @@ test('getExitCode returns 0 for clean', () => {
 
 test('getExitCode returns 1 for errors', () => {
   const report = { counts: { errors: 1, warnings: 0 } };
+  assert.equal(getExitCode(report, { warningsAsErrors: false }), 1);
+});
+
+test('getExitCode returns 1 when a scan root could not be read', () => {
+  const report = { roots: [{ error: 'permission denied' }], counts: { errors: 0, warnings: 0 } };
   assert.equal(getExitCode(report, { warningsAsErrors: false }), 1);
 });
 

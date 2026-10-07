@@ -9,7 +9,26 @@ const { parseFrontmatter, readSkillFile } = require('../src/frontmatter');
 test('parses name and description from frontmatter', () => {
   const result = parseFrontmatter('---\nname: demo\ndescription: Demo skill\n---\nBody');
   assert.deepEqual(result.metadata, { name: 'demo', description: 'Demo skill' });
+  assert.deepEqual(result.metadataLines, { name: 2, description: 3 });
   assert.deepEqual(result.errors, []);
+});
+
+test('parses CRLF and YAML folded/quoted description values', () => {
+  const result = parseFrontmatter('---\r\nname: "demo"\r\ndescription: >-\r\n  Scope: first line\r\n  second line\r\nquote: "a value"\r\n---\r\nBody');
+  assert.deepEqual(result.metadata, { name: 'demo', description: 'Scope: first line second line' });
+  assert.deepEqual(result.metadataLines, { name: 2, description: 3 });
+  assert.deepEqual(result.errors, []);
+});
+
+test('reports YAML syntax and duplicate key errors with source lines', () => {
+  const syntax = parseFrontmatter('---\nname: [invalid\ndescription: desc\n---');
+  assert.ok(syntax.errors.some((error) => error.code === 'MALFORMED_FRONTMATTER'));
+
+  const unresolvedAlias = parseFrontmatter('---\nname: *missing\ndescription: desc\n---');
+  assert.ok(unresolvedAlias.errors.some((error) => error.code === 'MALFORMED_FRONTMATTER'));
+
+  const duplicate = parseFrontmatter('---\nname: first\nname: second\ndescription: desc\n---');
+  assert.ok(duplicate.errors.some((error) => error.code === 'DUPLICATE_KEY' && error.line === 3));
 });
 
 test('reports error for missing name', () => {
@@ -38,12 +57,21 @@ test('handles missing frontmatter delimiters', () => {
   const result = parseFrontmatter('# Just markdown');
   assert.equal(result.metadata.name, '');
   assert.equal(result.metadata.description, '');
+  assert.deepEqual(result.errors.map((error) => error.code), ['MISSING_NAME', 'MISSING_DESCRIPTION']);
+});
+
+test('reports missing metadata for an unterminated frontmatter block', () => {
+  const result = parseFrontmatter('---\nname: demo\ndescription: Demo skill');
+  assert.ok(result.errors.some((error) => error.code === 'MALFORMED_FRONTMATTER'));
+  assert.equal(result.metadata.name, 'demo');
+  assert.equal(result.metadata.description, 'Demo skill');
 });
 
 test('handles malformed frontmatter', () => {
   const result = parseFrontmatter('---\nbad line without colon\nname: ok\ndescription: desc\n---');
-  assert.ok(result.errors.length > 0);
-  assert.equal(result.metadata.name, 'ok');
+  assert.ok(result.errors.some((error) => error.code === 'MALFORMED_FRONTMATTER'));
+  assert.equal(result.metadata.name, '');
+  assert.equal(result.errors[0].line, 2);
 });
 
 test('ignores unknown frontmatter keys', () => {

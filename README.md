@@ -4,14 +4,23 @@ Analyze agent skills across global and project-local directories with a terminal
 
 ## Quick Start
 
-```bash
-# Global install (recommended)
-npm install -g skills-analyzer
-skills-analyzer
+Requires Node.js 22 or newer.
 
-# Or use the short alias
+From a checkout:
+
+```bash
+npm ci
+npm test
+npm install --global .
+skills-analyzer
 sa
 ```
+
+After publishing, install globally with `npm install --global skills-analyzer`.
+
+After publishing, install globally with `npm install --global skills-analyzer`.
+
+CI tests Node 22 and 24 on Linux and macOS, and smoke-tests the packed CLI.
 
 ## Usage
 
@@ -67,9 +76,12 @@ sa [command] [options]
 | `MISSING_NAME` | error | No name in frontmatter |
 | `MISSING_DESCRIPTION` | error | No description in frontmatter |
 | `DUPLICATE_NAME` | error | Skill name used in multiple locations |
-| `MALFORMED_FRONTMATTER` | warning | Invalid frontmatter line |
+| `MALFORMED_FRONTMATTER` | warning | Invalid YAML or frontmatter block |
+| `DUPLICATE_KEY` | warning | Frontmatter key is repeated |
 | `NAME_DRIFT` | warning | Directory name differs from metadata name |
-| `MISSING_REFERENCE` | warning | Referenced local file not found |
+| `MISSING_REFERENCE` | warning | Markdown link or image points to a missing local file |
+
+Reference checks inspect Markdown link and image targets; code literals and fenced examples are ignored.
 
 ## Examples
 

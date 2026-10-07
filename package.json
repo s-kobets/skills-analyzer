@@ -4,20 +4,22 @@
   "description": "Analyze agent skills across global and project-local directories",
   "main": "dist/skills-analyzer.js",
   "files": [
-    "dist/"
+    "dist/",
+    "README.md"
   ],
   "scripts": {
     "build": "tsx scripts/build.ts",
+    "prepare": "npm run build",
     "test": "tsx --test",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run typecheck && npm run build && npm test"
+    "prepublishOnly": "npm run typecheck && npm test"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/segeykobets/skills-analyzer.git"
+    "url": "git+https://github.com/s-kobets/skills-analyzer.git"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "keywords": [
     "skills",
@@ -31,6 +33,10 @@
   "bin": {
     "skills-analyzer": "dist/skills-analyzer.js",
     "sa": "dist/skills-analyzer.js"
+  },
+  "dependencies": {
+    "markdown-it": "^15.0.2",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

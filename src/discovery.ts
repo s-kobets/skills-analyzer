@@ -7,6 +7,11 @@ export interface DiscoveryOptions {
   projectDir?: string;
 }
 
+export interface ScanOptions {
+  explicit?: boolean;
+  explicitRoots?: ReadonlySet<string>;
+}
+
 export interface RootReport {
   path: string;
   exists: boolean;
@@ -42,17 +47,17 @@ export function getDefaultRoots({ homeDir, projectDir }: DiscoveryOptions = {}):
 export function normalizeRoots(roots: string[], cwd?: string): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
-  for (const r of roots) {
-    const abs = path.resolve(cwd || process.cwd(), r);
-    if (!seen.has(abs)) {
-      seen.add(abs);
-      result.push(abs);
+  for (const root of roots) {
+    const absolute = path.resolve(cwd || process.cwd(), root);
+    if (!seen.has(absolute)) {
+      seen.add(absolute);
+      result.push(absolute);
     }
   }
   return result;
 }
 
-export function discoverRoot(rootPath: string, { explicit }: { explicit?: boolean } = {}): RootReport {
+export function discoverRoot(rootPath: string, { explicit }: ScanOptions = {}): RootReport {
   const result: RootReport = {
     path: rootPath,
     exists: false,
@@ -62,30 +67,43 @@ export function discoverRoot(rootPath: string, { explicit }: { explicit?: boolea
   };
 
   try {
-    if (!fs.existsSync(rootPath)) return result;
-    const stat = fs.statSync(rootPath);
-    if (!stat.isDirectory()) return result;
+    if (!fs.existsSync(rootPath)) {
+      if (explicit) result.error = 'Scan root not found: ' + rootPath;
+      return result;
+    }
+    if (!fs.statSync(rootPath).isDirectory()) {
+      if (explicit) result.error = 'Scan root is not a directory: ' + rootPath;
+      return result;
+    }
     result.exists = true;
 
-    const entries = fs.readdirSync(rootPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+    for (const entry of fs.readdirSync(rootPath, { withFileTypes: true })) {
       const skillPath = path.join(rootPath, entry.name);
-      const skillFile = path.join(skillPath, 'SKILL.md');
-      try {
-        if (fs.existsSync(skillFile) && fs.statSync(skillFile).isFile()) {
-          result.skills.push({ path: skillPath, name: entry.name });
+      let isDirectory = entry.isDirectory();
+      if (!isDirectory && entry.isSymbolicLink()) {
+        try {
+          isDirectory = fs.statSync(skillPath).isDirectory();
+        } catch {
+          continue;
         }
-      } catch {}
+      }
+      if (!isDirectory) continue;
+
+      const contents = fs.readdirSync(skillPath, { withFileTypes: true });
+      if (contents.some((child) => child.isFile())) {
+        result.skills.push({ path: skillPath, name: entry.name });
+      }
     }
-  } catch (err: unknown) {
-    result.error = (err as Error).message;
+  } catch (error) {
+    result.error = (error as Error).message;
     result.exists = true;
   }
 
   return result;
 }
 
-export function discoverSkills(roots: string[], options: Record<string, unknown>): RootReport[] {
-  return roots.map((r) => discoverRoot(r, options));
+export function discoverSkills(roots: string[], options: ScanOptions = {}): RootReport[] {
+  return roots.map((root) => discoverRoot(root, {
+    explicit: options.explicit || options.explicitRoots?.has(root),
+  }));
 }

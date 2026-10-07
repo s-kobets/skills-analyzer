@@ -48,7 +48,7 @@ test('normalizeRoots resolves relative paths', () => {
   assert.deepEqual(roots, ['/a', path.join(cwd, 'b')]);
 });
 
-test('discoverRoot finds immediate child directories containing SKILL.md', () => {
+test('discoverRoot finds immediate child directories, including missing SKILL.md candidates', () => {
   const root = makeTempDir();
   mkdir(path.join(root, 'one'));
   writeFile(path.join(root, 'one', 'SKILL.md'), '# One');
@@ -60,8 +60,18 @@ test('discoverRoot finds immediate child directories containing SKILL.md', () =>
   const result = discoverRoot(root, { explicit: true });
   assert.equal(result.path, root);
   assert.equal(result.exists, true);
-  assert.deepEqual(result.skills.map((s) => s.path), [path.join(root, 'one')]);
+  assert.deepEqual(result.skills.map((s) => s.path), [path.join(root, 'not-a-skill'), path.join(root, 'one')]);
   assert.equal(result.error, null);
+});
+
+test('discoverRoot follows symlinked skill directories', () => {
+  const root = makeTempDir();
+  const target = makeTempDir();
+  writeFile(path.join(target, 'SKILL.md'), '---\nname: linked\ndescription: linked skill\n---');
+  fs.symlinkSync(target, path.join(root, 'linked'), 'dir');
+
+  const result = discoverRoot(root);
+  assert.deepEqual(result.skills.map((skill) => skill.name), ['linked']);
 });
 
 test('missing default root returns exists: false without error', () => {

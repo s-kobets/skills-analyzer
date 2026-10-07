@@ -61,6 +61,32 @@ test('renderFindings lists recommendations', () => {
   assert.match(output, /Add description/);
 });
 
+test('renderFindings shows source line and duplicate locations', () => {
+  const skill = sampleReport.skills[1];
+  const report = {
+    ...sampleReport,
+    skills: [{
+      ...skill,
+      findings: [{
+        code: 'DUPLICATE_NAME',
+        severity: 'error',
+        message: 'Duplicate skill name "broken"',
+        recommendation: 'Give each skill a unique name.',
+        path: '/skills/broken/SKILL.md',
+        line: 2,
+        relatedPaths: [
+          { path: '/skills/broken/SKILL.md', line: 2 },
+          { path: '/other/broken/SKILL.md', line: 4 },
+        ],
+      }],
+    }],
+  };
+
+  const output = renderFindings(report, { color: false });
+  assert.match(output, /\/skills\/broken\/SKILL\.md:2/);
+  assert.match(output, /\/other\/broken\/SKILL\.md:4/);
+});
+
 test('renderFindings omits section when no problems', () => {
   const clean = { ...sampleReport, skills: [sampleReport.skills[0]], counts: { roots: 1, skills: 1, healthy: 1, warnings: 0, errors: 0 } };
   const output = renderFindings(clean, { color: false });

@@ -5,7 +5,7 @@ esbuild.buildSync({
   bundle: true,
   minify: true,
   platform: 'node',
-  target: 'node18',
+  target: 'node22',
   outfile: 'dist/skills-analyzer.js',
   banner: { js: '#!/usr/bin/env node' },
   external: [],

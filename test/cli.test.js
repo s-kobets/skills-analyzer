@@ -57,6 +57,44 @@ test('report --json emits parseable JSON and exits on errors', () => {
   assert.ok(report.counts.skills >= 1);
 });
 
+test('report emits JSON without requiring --json', () => {
+  const fixture = makeFixture({
+    '.agents/skills/good/SKILL.md': '---\nname: good\ndescription: OK\n---',
+  });
+
+  const result = runCli(['report', '--project', fixture]);
+
+  assert.doesNotThrow(() => JSON.parse(result.stdout));
+  assert.equal(result.status, 0);
+});
+
+test('reports a skill directory without SKILL.md', () => {
+  const fixture = makeFixture({
+    '.agents/skills/broken/README.md': 'No skill file',
+  });
+
+  const result = runCli(['check', '--project', fixture]);
+
+  assert.match(result.stdout, /MISSING_SKILL_FILE|SKILL\.md/);
+  assert.equal(result.status, 1);
+});
+
+test('reports root scan errors and exits non-zero', () => {
+  const root = path.join(tmpBase, 'unreadable-root');
+  fs.mkdirSync(root, { recursive: true });
+  fs.chmodSync(root, 0o000);
+
+  let result;
+  try {
+    result = runCli(['--root', root]);
+  } finally {
+    fs.chmodSync(root, 0o755);
+  }
+
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /permission denied|EACCES/i);
+});
+
 test('check command reports findings', () => {
   const fixture = makeFixture({
     '.agents/skills/good/SKILL.md': '---\nname: good\ndescription: OK\n---',
@@ -67,6 +105,17 @@ test('check command reports findings', () => {
 
   assert.match(result.stdout, /Recommendations/);
   assert.equal(result.status, 1);
+});
+
+test('check command prints source line for a missing reference', () => {
+  const fixture = makeFixture({
+    '.agents/skills/broken/SKILL.md': '---\nname: broken\ndescription: broken link\n---\nSee [missing](./missing.md)',
+  });
+
+  const result = runCli(['check', '--no-color', '--project', fixture]);
+
+  assert.match(result.stdout, /SKILL\.md:5/);
+  assert.equal(result.status, 0);
 });
 
 test('--root flag adds additional scan path', () => {
@@ -111,6 +160,29 @@ test('unknown option prints usage and exits 2', () => {
   const result = runCli(['--bogus-flag']);
 
   assert.equal(result.status, 2);
+});
+
+test('path options require values', () => {
+  for (const option of ['--project', '--root']) {
+    const result = runCli([option]);
+
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, new RegExp(`${option} requires a path`));
+  }
+});
+
+test('rejects a nonexistent project directory', () => {
+  const result = runCli(['--project', path.join(tmpBase, 'missing-project')]);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /invalid project directory/i);
+});
+
+test('reports a nonexistent explicit scan root as an error', () => {
+  const result = runCli(['--no-color', '--root', path.join(tmpBase, 'missing-root')]);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /Scan root not found/);
 });
 
 test.after(() => {
