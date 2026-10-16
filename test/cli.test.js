@@ -31,6 +31,13 @@ function makeFixture(contents) {
   return dir;
 }
 
+function makeCommand(program) {
+  const commandPath = path.join(tmpBase, `semantic-${Math.random().toString(36).slice(2)}.js`);
+  fs.writeFileSync(commandPath, `#!/usr/bin/env node\n${program}`);
+  fs.chmodSync(commandPath, 0o755);
+  return commandPath;
+}
+
 test('default scan renders tree', () => {
   const fixture = makeFixture({
     '.agents/skills/alpha/SKILL.md': '---\nname: alpha\ndescription: first skill\n---',
@@ -116,6 +123,61 @@ test('check command prints source line for a missing reference', () => {
 
   assert.match(result.stdout, /SKILL\.md:5/);
   assert.equal(result.status, 0);
+});
+
+test('check --interactions reports likely overlaps in JSON', () => {
+  const fixture = makeFixture({
+    '.agents/skills/react-forms/SKILL.md': '---\nname: react-forms\ndescription: Build accessible React forms with validation\n---',
+    '.agents/skills/form-helper/SKILL.md': '---\nname: form-helper\ndescription: Create accessible React forms and validation\n---',
+  });
+
+  const result = runCli(['check', '--interactions', '--json', '--project', fixture]);
+
+  assert.equal(result.status, 0);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.interactions.length, 1);
+  assert.deepEqual(report.interactions[0].sharedTerms, ['accessible', 'forms', 'react', 'validation']);
+  assert.equal(report.interactions[0].citations.length, 2);
+  assert.ok(report.interactions[0].citations.every((citation) => citation.line === 3));
+
+  const text = runCli(['check', '--interactions', '--no-color', '--project', fixture]);
+  assert.match(text.stdout, /\[OVERLAP\?\] form-helper ↔ react-forms/);
+  assert.equal((text.stdout.match(/Shared terms:/g) || []).length, 1);
+  assert.doesNotMatch(text.stdout, /  Skills:/);
+  assert.match(text.stdout, /\n    "description: Create accessible React forms and validation"/);
+});
+
+test('semantic command classifies candidates only when interactions are requested', () => {
+  const fixture = makeFixture({
+    '.agents/skills/tab-style/SKILL.md': '---\nname: tab-style\ndescription: Format code with tabs\n---\nAlways format with tabs.',
+    '.agents/skills/space-style/SKILL.md': '---\nname: space-style\ndescription: Format code with spaces\n---\nPrefer spaces for formatting.',
+  });
+  const command = makeCommand([
+    'const input = JSON.parse(require("node:fs").readFileSync(0, "utf8"));',
+    'const pair = input.candidates[0];',
+    'process.stdout.write(JSON.stringify({version: 1, interactions: [{candidateId: pair.id, type: "conflict", explanation: "Formatting rules disagree", citations: [{skillId: pair.skills[0].id, quote: "Prefer spaces for formatting."}, {skillId: pair.skills[1].id, quote: "Always format with tabs."}]}]}));',
+  ].join('\n'));
+
+  const result = runCli(['check', '--interactions', '--semantic-command', command, '--project', fixture, '--no-color']);
+
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.match(result.stdout, /Skill interactions/);
+  assert.match(result.stdout, /CONFLICT\?/);
+  assert.match(result.stdout, /SKILL\.md:5/);
+});
+
+test('semantic command requires explicit interaction mode and failures exit non-zero', () => {
+  const missingMode = runCli(['check', '--semantic-command', '/does/not/run']);
+  assert.equal(missingMode.status, 2);
+  assert.match(missingMode.stderr, /requires --interactions/);
+
+  const fixture = makeFixture({
+    '.agents/skills/a/SKILL.md': '---\nname: a\ndescription: Format code using tabs\n---',
+    '.agents/skills/b/SKILL.md': '---\nname: b\ndescription: Format code using spaces\n---',
+  });
+  const failure = runCli(['check', '--interactions', '--semantic-command', '/missing/semantic-command', '--project', fixture]);
+  assert.equal(failure.status, 1);
+  assert.match(failure.stderr, /interaction analysis failed/);
 });
 
 test('--root flag adds additional scan path', () => {

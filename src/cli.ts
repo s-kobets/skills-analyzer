@@ -2,7 +2,8 @@ import fs from 'node:fs';
 
 import { getDefaultRoots, normalizeRoots, discoverSkills } from './discovery.js';
 import { validateSkill, applyDuplicateFindings, buildReport, getExitCode } from './validate.js';
-import { renderTree, renderFindings, renderJson } from './render.js';
+import { analyzeInteractions } from './interactions.js';
+import { renderTree, renderFindings, renderInteractions, renderJson } from './render.js';
 import type { SkillReport } from './validate.js';
 import type { RootReport } from './discovery.js';
 
@@ -15,6 +16,8 @@ export interface CliOptions {
   json: boolean;
   problemsOnly: boolean;
   warningsAsErrors: boolean;
+  interactions: boolean;
+  semanticCommand?: string;
   help?: boolean;
   error?: string;
 }
@@ -35,6 +38,7 @@ export function parseArgs(argv: string[]): CliOptions {
     json: false,
     problemsOnly: false,
     warningsAsErrors: false,
+    interactions: false,
   };
 
   let i = 0;
@@ -66,6 +70,13 @@ export function parseArgs(argv: string[]): CliOptions {
       case '--warnings-as-errors':
         options.warningsAsErrors = true;
         break;
+      case '--interactions':
+        options.interactions = true;
+        break;
+      case '--semantic-command':
+        if (!args[i + 1] || args[i + 1].startsWith('-')) return { ...options, error: '--semantic-command requires an executable path' };
+        options.semanticCommand = args[++i];
+        break;
       case '--no-color':
         options.color = false;
         break;
@@ -76,6 +87,9 @@ export function parseArgs(argv: string[]): CliOptions {
         return { ...options, error: 'Unknown option: ' + arg };
     }
     i++;
+  }
+  if (options.semanticCommand && !options.interactions) {
+    return { ...options, error: '--semantic-command requires --interactions' };
   }
   return options;
 }
@@ -95,6 +109,8 @@ Options:
   --json               Output in JSON format
   --problems-only      Only show skills with problems
   --warnings-as-errors Treat warnings as errors for exit code
+  --interactions       Find skills that may overlap or conflict
+  --semantic-command <path> Use executable for semantic analysis (requires --interactions)
   --no-color           Disable colored output
   -h, --help           Show this help`;
 }
@@ -131,6 +147,13 @@ export function run(options: CliOptions, io: CliIO): number {
 
   skillReports = applyDuplicateFindings(skillReports);
   const report = buildReport(rootReports, skillReports);
+  let interactionError: string | null = null;
+  if (options.interactions) {
+    const result = analyzeInteractions(skillReports, { semanticCommand: options.semanticCommand });
+    report.interactions = result.interactions;
+    interactionError = result.error;
+    if (interactionError) io.err.write('skills-analyzer: interaction analysis failed: ' + interactionError + '\n');
+  }
   const renderOptions = { color: options.color, problemsOnly: options.problemsOnly };
 
   if (options.json || options.command === 'report') {
@@ -138,6 +161,7 @@ export function run(options: CliOptions, io: CliIO): number {
   } else {
     io.out.write(renderTree(report, renderOptions) + '\n');
     io.out.write(renderFindings(report, renderOptions) + '\n');
+    io.out.write(renderInteractions(report, renderOptions) + '\n');
   }
-  return getExitCode(report, options);
+  return interactionError ? 1 : getExitCode(report, options);
 }

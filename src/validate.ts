@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import MarkdownIt from 'markdown-it';
 
 import type { SkillEntry, RootReport } from './discovery.js';
+import type { SkillInteraction } from './interactions.js';
 import { parseFrontmatter, readSkillFile } from './frontmatter.js';
 
 const markdown = new MarkdownIt();
@@ -40,6 +41,7 @@ export interface Report {
   roots: RootReport[];
   skills: SkillReport[];
   counts: Counts;
+  interactions: SkillInteraction[];
 }
 
 export function validateSkill(skill: SkillEntry): SkillReport {
@@ -214,7 +216,7 @@ export function buildReport(rootReports: RootReport[], skillReports: SkillReport
     else if (skill.status === 'error') counts.errors++;
     else if (skill.status === 'warning') counts.warnings++;
   }
-  return { roots: rootReports, skills: skillReports, counts };
+  return { roots: rootReports, skills: skillReports, counts, interactions: [] };
 }
 
 export function getExitCode(report: Report, options: { warningsAsErrors?: boolean }): number {

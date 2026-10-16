@@ -1,4 +1,5 @@
 import path from 'node:path';
+import os from 'node:os';
 
 import type { Report } from './validate.js';
 
@@ -72,6 +73,40 @@ export function renderFindings(report: Report, options: RenderOptions = {}): str
     lines.push('');
   }
   return lines.join('\n');
+}
+
+export function renderInteractions(report: Report, options: RenderOptions = {}): string {
+  const interactions = report.interactions || [];
+  if (interactions.length === 0) return '';
+
+  const color = options.color !== false;
+  const paint = (text: string, code: string): string => color ? `\x1b[${code}m${text}\x1b[0m` : text;
+  const lines = ['', 'Skill interactions', ''];
+  for (const [index, interaction] of interactions.entries()) {
+    if (index > 0) lines.push('');
+    const label = interaction.type === 'conflict' ? paint('[CONFLICT?]', '31') : paint('[OVERLAP?]', '33');
+    lines.push(`${label} ${paint(`${interaction.names[0]} ↔ ${interaction.names[1]}`, '1')}`);
+    lines.push(`  Shared terms: ${interaction.sharedTerms.join(', ')}`);
+    if (interaction.explanation !== `Shared terms: ${interaction.sharedTerms.join(', ')}`) {
+      lines.push('  Why: ' + interaction.explanation);
+    }
+    for (const citation of interaction.citations) {
+      lines.push(`  ${paint(`${shortenHomePath(citation.path)}:${citation.line}`, '90')}`);
+      lines.push(`    "${shortenExcerpt(citation.quote)}"`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function shortenHomePath(sourcePath: string): string {
+  const relative = path.relative(os.homedir(), sourcePath);
+  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return sourcePath;
+  return '~' + path.sep + relative;
+}
+
+function shortenExcerpt(quote: string): string {
+  const safe = quote.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim();
+  return safe.length > 100 ? safe.slice(0, 97).trimEnd() + '...' : safe;
 }
 
 export function renderJson(report: Report): string {

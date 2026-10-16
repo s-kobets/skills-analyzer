@@ -1,7 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const os = require('node:os');
+const path = require('node:path');
 
-const { renderTree, renderFindings, renderJson } = require('../src/render');
+const { renderTree, renderFindings, renderInteractions, renderJson } = require('../src/render');
 
 const sampleReport = {
   roots: [
@@ -99,6 +101,56 @@ test('renderJson produces valid parseable JSON', () => {
   assert.equal(parsed.counts.skills, 2);
   assert.equal(parsed.counts.healthy, 1);
   assert.equal(parsed.counts.errors, 1);
+});
+
+test('renderInteractions shows skill pairs, advisory type, terms, and verified citations', () => {
+  const home = os.homedir();
+  const report = {
+    ...sampleReport,
+    interactions: [{
+      candidateId: 'pair-1',
+      type: 'conflict',
+      names: ['tabs', 'spaces'],
+      paths: [path.join(home, '.agents/skills/tabs/SKILL.md'), path.join(home, '.agents/skills/spaces/SKILL.md')],
+      explanation: 'Formatting requirements differ',
+      sharedTerms: ['formatting'],
+      citations: [{ path: path.join(home, '.agents/skills/tabs/SKILL.md'), line: 7, quote: 'Always format with tabs.' }],
+    }],
+  };
+
+  const output = renderInteractions(report, { color: false });
+
+  assert.match(output, /Skill interactions/);
+  assert.match(output, /\[CONFLICT\?\] tabs ↔ spaces/);
+  assert.match(output, /Shared terms: formatting/);
+  assert.match(output, /~\/\.agents\/skills\/tabs\/SKILL\.md:7/);
+  assert.match(output, /Always format with tabs/);
+  assert.doesNotMatch(output, /  Skills:/);
+  assert.equal((output.match(/Shared terms:/g) || []).length, 1);
+  assert.deepEqual(JSON.parse(renderJson(report)).interactions, report.interactions);
+});
+
+test('renderInteractions colors labels unless color is disabled and shortens long excerpts', () => {
+  const report = {
+    ...sampleReport,
+    interactions: [{
+      candidateId: 'pair-1',
+      type: 'overlap',
+      names: ['one', 'two'],
+      paths: ['/outside/one/SKILL.md', '/outside/two/SKILL.md'],
+      explanation: 'Shared terms: user, plan',
+      sharedTerms: ['user', 'plan'],
+      citations: [{ path: '/outside/one/SKILL.md', line: 3, quote: 'x'.repeat(140) }],
+    }],
+  };
+
+  const colored = renderInteractions(report);
+  const plain = renderInteractions(report, { color: false });
+
+  assert.match(colored, /\x1b\[33m\[OVERLAP\?\]\x1b\[0m/);
+  assert.doesNotMatch(plain, /\x1b\[/);
+  assert.match(plain, /\.\.\./);
+  assert.doesNotMatch(plain, /x{100}/);
 });
 
 test('renderProblemsOnly filters healthy skills', () => {
